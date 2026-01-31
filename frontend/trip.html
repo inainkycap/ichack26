@@ -1,109 +1,109 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <title>Trip Voting</title>
-  </head>
-  <body class="bg-slate-50 text-slate-900">
-    <!-- Toast -->
-    <div id="toast"
-      class="fixed top-5 right-5 opacity-0 translate-y-2 transition duration-200
-             bg-slate-900 text-white text-sm px-4 py-2 rounded-xl shadow-lg">
-      Toast
-    </div>
-
-    <div class="max-w-6xl mx-auto p-6">
-      <div class="flex items-start justify-between gap-4 flex-wrap">
-        <div class="min-w-[260px]">
-          <div id="tripChip" class="inline-flex items-center px-3 py-1 rounded-full bg-white border border-slate-200 text-xs text-slate-600">
-            Trip
-          </div>
-          <h1 id="tripTitle" class="text-4xl font-bold tracking-tight mt-3">Trip</h1>
-          <p class="text-slate-600 mt-2">Vote in seconds. Live tally updates automatically.</p>
-          <p id="error" class="text-red-600 mt-2"></p>
-
-          <div class="flex gap-2 mt-4">
-            <span id="step-join" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Join</span>
-            <span id="step-vote" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Vote</span>
-            <span id="step-results" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Results</span>
-          </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <title>Trip Voting</title>
+    </head>
+    <body class="bg-slate-50 text-slate-900">
+        <!-- Toast -->
+        <div id="toast"
+            class="fixed top-5 right-5 opacity-0 translate-y-2 transition duration-200
+                         bg-slate-900 text-white text-sm px-4 py-2 rounded-xl shadow-lg">
+            Toast
         </div>
 
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-5 w-full max-w-sm">
-          <div class="text-sm font-medium text-slate-700">Your name</div>
-          <div class="flex gap-2 mt-2">
-            <input id="nameInput"
-              class="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              placeholder="Yuxiang" />
-            <button id="joinBtn" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-sm font-medium">
-              Join
-            </button>
-          </div>
-          <div class="text-xs text-slate-500 mt-2">You only need to join once per device.</div>
-        </div>
-      </div>
+        <div class="max-w-6xl mx-auto p-6">
+            <div class="flex items-start justify-between gap-4 flex-wrap">
+                <div class="min-w-[260px]">
+                    <div id="tripChip" class="inline-flex items-center px-3 py-1 rounded-full bg-white border border-slate-200 text-xs text-slate-600">
+                        Trip
+                    </div>
+                    <h1 id="tripTitle" class="text-4xl font-bold tracking-tight mt-3">Trip</h1>
+                    <p class="text-slate-600 mt-2">Vote in seconds. Live tally updates automatically.</p>
+                    <p id="error" class="text-red-600 mt-2"></p>
 
-      <div class="grid lg:grid-cols-2 gap-6 mt-8">
-        <!-- Vote card -->
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
-          <h2 class="text-lg font-semibold">Tap to vote</h2>
+                    <div class="flex gap-2 mt-4">
+                        <span id="step-join" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Join</span>
+                        <span id="step-vote" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Vote</span>
+                        <span id="step-results" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Results</span>
+                    </div>
+                </div>
 
-          <div class="mt-5">
-            <div class="text-xs font-medium text-slate-500 mb-2">DESTINATIONS</div>
-            <div id="destOptions" class="flex flex-wrap gap-2"></div>
-          </div>
-
-          <div class="mt-6">
-            <div class="text-xs font-medium text-slate-500 mb-2">DATES</div>
-            <div id="dateOptions" class="flex flex-wrap gap-2"></div>
-          </div>
-        </div>
-
-        <!-- Results card -->
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
-          <h2 class="text-lg font-semibold">Live tally</h2>
-
-          <div class="mt-5 p-5 rounded-3xl border border-slate-200 bg-slate-50">
-            <div class="text-xs font-medium text-slate-500">CURRENT PICK</div>
-            <div class="mt-2">
-              <div class="text-2xl font-bold" id="winnerDest">—</div>
-              <div class="text-slate-600 mt-1" id="winnerDate">—</div>
+                <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-5 w-full max-w-sm">
+                    <div class="text-sm font-medium text-slate-700">Your name</div>
+                    <div class="flex gap-2 mt-2">
+                        <input id="nameInput"
+                            class="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-200"
+                            placeholder="Eg. Valentina" />
+                        <button id="joinBtn" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-sm font-medium">
+                            Join
+                        </button>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-2">You only need to join once per device.</div>
+                </div>
             </div>
-          </div>
 
-          <div class="grid grid-cols-2 gap-6 mt-6">
-            <div>
-              <div class="text-xs font-medium text-slate-500">DESTINATION VOTES</div>
-              <div id="destResults" class="mt-2"></div>
+            <div class="grid lg:grid-cols-2 gap-6 mt-8">
+                <!-- Vote card -->
+                <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+                    <h2 class="text-lg font-semibold">Tap to vote</h2>
+
+                    <div class="mt-5">
+                        <div class="text-xs font-medium text-slate-500 mb-2">DESTINATIONS</div>
+                        <div id="destOptions" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="mt-6">
+                        <div class="text-xs font-medium text-slate-500 mb-2">DATES</div>
+                        <div id="dateOptions" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+
+                <!-- Results card -->
+                <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+                    <h2 class="text-lg font-semibold">Live tally</h2>
+
+                    <div class="mt-5 p-5 rounded-3xl border border-slate-200 bg-slate-50">
+                        <div class="text-xs font-medium text-slate-500">CURRENT PICK</div>
+                        <div class="mt-2">
+                            <div class="text-2xl font-bold" id="winnerDest">—</div>
+                            <div class="text-slate-600 mt-1" id="winnerDate">—</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-6 mt-6">
+                        <div>
+                            <div class="text-xs font-medium text-slate-500">DESTINATION VOTES</div>
+                            <div id="destResults" class="mt-2"></div>
+                        </div>
+                        <div>
+                            <div class="text-xs font-medium text-slate-500">DATE VOTES</div>
+                            <div id="dateResults" class="mt-2"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div>
-              <div class="text-xs font-medium text-slate-500">DATE VOTES</div>
-              <div id="dateResults" class="mt-2"></div>
+
+            <!-- Recommendations -->
+            <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 mt-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold">Good options</h2>
+                        <p class="text-slate-600 text-sm mt-1">A simple recommender to break deadlocks.</p>
+                    </div>
+                    <button id="recsBtn" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-sm">
+                        Refresh
+                    </button>
+                </div>
+                <div id="recsList" class="grid md:grid-cols-3 gap-3 mt-4"></div>
             </div>
-          </div>
         </div>
-      </div>
 
-      <!-- Recommendations -->
-      <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 mt-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-semibold">Good options</h2>
-            <p class="text-slate-600 text-sm mt-1">A simple recommender to break deadlocks.</p>
-          </div>
-          <button id="recsBtn" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-sm">
-            Refresh
-          </button>
-        </div>
-        <div id="recsList" class="grid md:grid-cols-3 gap-3 mt-4"></div>
-      </div>
-    </div>
-
-    <script type="module">
-      import { initTrip } from "./app.js";
-      initTrip();
-    </script>
-  </body>
+        <script type="module">
+            import { initTrip } from "./app.js";
+            initTrip();
+        </script>
+    </body>
 </html>
