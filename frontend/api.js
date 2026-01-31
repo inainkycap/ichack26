@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = localStorage.getItem("api_base") || "http://127.0.0.1:8000";
 
 function uid() {
     return Math.random().toString(36).slice(2, 10);
@@ -14,6 +14,8 @@ function lsGet(key, fallback = null) {
 
 
 const mockStore = { trips: {} };
+
+
 
 function ensureTrip(tripId) {
     if (!mockStore.trips[tripId]) {
@@ -74,34 +76,34 @@ async function mock(path, options = {}) {
     }
 
     const voteMatch = path.match(/^\/trip\/([^/]+)\/vote$/);
-if (method === "POST" && voteMatch) {
-    const trip = ensureTrip(voteMatch[1]);
-    const type = body?.type; // "destination" | "dates"
-    const option = body?.option;
-    const memberId = body?.member_id;
+    if (method === "POST" && voteMatch) {
+        const trip = ensureTrip(voteMatch[1]);
+        const type = body?.type; // "destination" | "dates"
+        const option = body?.option;
+        const memberId = body?.member_id;
 
-    if (!type || !option || !memberId) return { ok: false };
+        if (!type || !option || !memberId) return { ok: false };
 
-    // Track a single vote per member per type, allow changing vote without inflating totals
-    trip.memberVotes ??= {};                             // memberId -> { destination: "...", dates: "..." }
-    trip.memberVotes[memberId] ??= {};
+        // Track a single vote per member per type, allow changing vote without inflating totals
+        trip.memberVotes ??= {};                             // memberId -> { destination: "...", dates: "..." }
+        trip.memberVotes[memberId] ??= {};
 
-    const prev = trip.memberVotes[memberId][type];
-    if (prev && trip.votes[type][prev] != null) {
-        const newCount = (trip.votes[type][prev] || 0) - 1;
-        if (newCount <= 0) {
-                delete trip.votes[type][prev];            // ✅ removes it entirely
-        } else {
-                trip.votes[type][prev] = newCount;
+        const prev = trip.memberVotes[memberId][type];
+        if (prev && trip.votes[type][prev] != null) {
+            const newCount = (trip.votes[type][prev] || 0) - 1;
+            if (newCount <= 0) {
+                    delete trip.votes[type][prev];            // ✅ removes it entirely
+            } else {
+                    trip.votes[type][prev] = newCount;
+            }
         }
+
+
+        trip.memberVotes[memberId][type] = option;
+        trip.votes[type][option] = (trip.votes[type][option] || 0) + 1;
+
+        return { ok: true };
     }
-
-
-    trip.memberVotes[memberId][type] = option;
-    trip.votes[type][option] = (trip.votes[type][option] || 0) + 1;
-
-    return { ok: true };
-}
 
 
     const resMatch = path.match(/^\/trip\/([^/]+)\/results$/);
@@ -144,3 +146,57 @@ export async function apiFetch(path, options = {}) {
     }
 }
 
+// ============================================================================
+// API ADAPTER (frontend should call these, not raw apiFetch paths)
+// ============================================================================
+
+export async function createTrip(title) {
+    return await apiFetch("/trip", {
+        method: "POST",
+        body: JSON.stringify({ title }),
+    });
+}
+
+export async function getTripOptions(tripId) {
+    return await apiFetch(`/trip/${tripId}/options`);
+}
+
+export async function joinTrip(tripId, name) {
+    return await apiFetch(`/trip/${tripId}/join`, {
+        method: "POST",
+        body: JSON.stringify({ name }),
+    });
+}
+
+export async function castVote(tripId, memberId, type, optionLabel) {
+    // Try the UI type first ("dates"), then fallback to backend-friendly ("date")
+    const typeVariants = (type === "dates") ? ["dates", "date"] : [type];
+
+    let lastError = null;
+
+    for (const t of typeVariants) {
+        try {
+            return await apiFetch(`/trip/${tripId}/vote`, {
+                method: "POST",
+                body: JSON.stringify({
+                    member_id: memberId,
+                    type: t,
+                    option: optionLabel,
+                }),
+            });
+        } catch (e) {
+            lastError = e;
+        }
+    }
+
+    throw lastError;
+}
+
+
+export async function getTripResults(tripId) {
+    return await apiFetch(`/trip/${tripId}/results`);
+}
+
+export async function getRecommendations(tripId) {
+    return await apiFetch(`/trip/${tripId}/recommendations`);
+}

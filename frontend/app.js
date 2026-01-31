@@ -1,4 +1,11 @@
-import { apiFetch } from "./api.js";
+import {
+    createTrip,
+    getTripOptions,
+    joinTrip,
+    castVote,
+    getTripResults,
+    getRecommendations,
+} from "./api.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -21,7 +28,6 @@ function lsGet(key, fallback = null) {
 function lsSet(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
 }
-
 
 function toast(msg) {
     const t = $("#toast");
@@ -76,10 +82,7 @@ function selectPill(container, btn) {
 export async function initIndex() {
     $("#createBtn").addEventListener("click", async () => {
         const title = $("#tripTitle").value.trim() || "Weekend Trip";
-        const data = await apiFetch("/trip", {
-            method: "POST",
-            body: JSON.stringify({ title }),
-        });
+        const data = await createTrip(title);
 
         localStorage.setItem("trip_id", JSON.stringify(data.trip_id));
         localStorage.setItem(`trip_title_${data.trip_id}`, JSON.stringify(title));
@@ -101,7 +104,6 @@ export async function initIndex() {
     });
 }
 
-
 export async function initTrip() {
     const tripId = getTripId();
     if (!tripId) {
@@ -111,7 +113,14 @@ export async function initTrip() {
     lsSet("trip_id", tripId);
     $("#tripChip").textContent = `Trip • ${tripId}`;
 
-    const opt = await apiFetch(`/trip/${tripId}/options`);
+    // ✅ If already joined earlier, prefill name + set step
+    const existingMember = ls.get(`member_${tripId}`, null);
+    if (existingMember?.name) {
+        $("#nameInput").value = existingMember.name;
+        setActiveStep(1);
+    }
+
+    const opt = await getTripOptions(tripId);
 
     const savedTitle = lsGet(`trip_title_${tripId}`, null);
     const apiTitle = (opt.title || "").trim();
@@ -137,8 +146,11 @@ export async function initTrip() {
 
     $("#joinBtn").addEventListener("click", async () => {
         const name = $("#nameInput").value.trim() || "Anonymous";
-        const data = await apiFetch(`/trip/${tripId}/join`, { method: "POST", body: JSON.stringify({ name }) });
-        ls.set(`member_${tripId}`, { id: data.member_id, name });
+        const data = await joinTrip(tripId, name);
+
+        // ✅ store member so voting works
+        ls.set(`member_${tripId}`, { id: data.member_id, name: name });
+
         toast(`Joined as ${name}`);
         setActiveStep(1);
         await refresh(tripId);
@@ -159,10 +171,8 @@ async function vote(tripId, type, option) {
         toast("Join first");
         return false;
     }
-    await apiFetch(`/trip/${tripId}/vote`, {
-        method: "POST",
-        body: JSON.stringify({ member_id: member.id, type, option }),
-    });
+    await castVote(tripId, member.id, type, option);
+
     toast(`Voted: ${option}`);
     setActiveStep(2);
     await refresh(tripId);
@@ -170,13 +180,12 @@ async function vote(tripId, type, option) {
 }
 
 async function refresh(tripId) {
-    const data = await apiFetch(`/trip/${tripId}/results`);
+    const data = await getTripResults(tripId);
     $("#winnerDest").textContent = data.winner.destination ?? "—";
     $("#winnerDate").textContent = data.winner.dates ?? "—";
     renderList($("#destResults"), data.destinations);
     renderList($("#dateResults"), data.dates);
 }
-
 
 function renderList(el, items) {
     el.innerHTML = "";
@@ -196,9 +205,8 @@ function renderList(el, items) {
     });
 }
 
-
 async function refreshRecs(tripId) {
-    const data = await apiFetch(`/trip/${tripId}/recommendations`);
+    const data = await getRecommendations(tripId);
     const el = $("#recsList");
     el.innerHTML = "";
     (data.suggestions || []).slice(0, 3).forEach((s) => {
