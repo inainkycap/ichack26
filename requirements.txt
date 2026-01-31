@@ -1,4 +1,1 @@
-fastapi
-uvicorn
-sqlmodel
-requests
+
