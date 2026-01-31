@@ -55,10 +55,35 @@
                         <div id="destOptions" class="flex flex-wrap gap-2"></div>
                     </div>
 
+                    <div class="flex gap-2 mt-3">
+                        <input id="destInput"
+                            class="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-200"
+                            placeholder="Add a destination (e.g., Paris)" />
+                        <button id="addDestBtn"
+                            class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-sm">
+                            Add
+                        </button>
+                    </div>
+
                     <div class="mt-6">
                         <div class="text-xs font-medium text-slate-500 mb-2">DATES</div>
                         <div id="dateOptions" class="flex flex-wrap gap-2"></div>
                     </div>
+
+                    <div class="grid grid-cols-2 gap-2 mt-3">
+                        <input id="startDate"
+                            type="date"
+                            class="px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-200" />
+                        <input id="endDate"
+                            type="date"
+                            class="px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-200" />
+                    </div>
+
+                    <button id="addDateBtn"
+                        class="mt-2 w-full px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-sm">
+                        Add date range
+                    </button>
+
                 </div>
 
                 <!-- Results card -->

@@ -17,6 +17,16 @@ const ls = {
     },
 };
 
+const SUGGESTED_CITIES = [
+    "Paris", "London", "Barcelona", "Madrid", "Lisbon", "Porto", "Rome", "Milan",
+    "Amsterdam", "Berlin", "Munich", "Vienna", "Prague", "Budapest", "Warsaw",
+    "Copenhagen", "Stockholm", "Oslo", "Helsinki", "Dublin", "Edinburgh",
+    "Brussels", "Zurich", "Geneva", "Athens", "Istanbul", "Dubrovnik",
+    "Valencia", "Seville", "Granada", "Malaga", "Bilbao", "Nice", "Lyon",
+    "Marseille", "Florence", "Venice", "Naples", "Krakow", "Wroclaw"
+];
+
+
 function lsGet(key, fallback = null) {
     try {
         return JSON.parse(localStorage.getItem(key)) ?? fallback;
@@ -135,13 +145,61 @@ export async function initTrip() {
 
     const destWrap = $("#destOptions");
     const dateWrap = $("#dateOptions");
-    renderPills(destWrap, opt.options.destination, async (choice, btn) => {
-        const ok = await vote(tripId, "destination", choice);
-        if (ok) selectPill(destWrap, btn);
+
+    // Make local mutable copies (so we can add options on the fly)
+    const destinationOptions = [...new Set([...SUGGESTED_CITIES, ...opt.options.destination])];
+
+    const dateOptions = [...opt.options.dates];
+
+    function renderAll() {
+        renderPills(destWrap, destinationOptions, async (choice, btn) => {
+            const ok = await vote(tripId, "destination", choice);
+            if (ok) selectPill(destWrap, btn);
+        });
+
+        renderPills(dateWrap, dateOptions, async (choice, btn) => {
+            const ok = await vote(tripId, "dates", choice);
+            if (ok) selectPill(dateWrap, btn);
+        });
+    }
+
+    renderAll();
+
+    // Add destination button
+    $("#addDestBtn").addEventListener("click", () => {
+        const v = ($("#destInput").value || "").trim();
+        if (!v) return;
+
+        if (!destinationOptions.includes(v)) {
+            destinationOptions.unshift(v);
+            renderAll();
+            toast("Added destination");
+        }
+        $("#destInput").value = "";
     });
-    renderPills(dateWrap, opt.options.dates, async (choice, btn) => {
-        const ok = await vote(tripId, "dates", choice);
-        if (ok) selectPill(dateWrap, btn);
+
+    // Add date range button
+    $("#addDateBtn").addEventListener("click", () => {
+        const start = $("#startDate").value;
+        const end = $("#endDate").value;
+
+        if (!start || !end) {
+            toast("Pick start + end");
+            return;
+        }
+
+        if (end < start) {
+            toast("End date must be after start");
+            return;
+        }
+
+        const label = `${start} → ${end}`;
+
+        if (!dateOptions.includes(label)) {
+            dateOptions.unshift(label);
+            renderAll();
+            toast("Added date range");
+        }
     });
 
     $("#joinBtn").addEventListener("click", async () => {
