@@ -3,6 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Literal, List
 from collections import defaultdict
+import sys
+import os
+
+# Add backend directory to Python path
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 # Import Person C's algorithms
 try:
@@ -12,8 +19,12 @@ try:
         CrowdAvoidanceScorer
     )
     ALGORITHMS_AVAILABLE = True
-except ImportError:
-    print("⚠️  Warning: algorithm_person_c.py not found. Using fallback recommendations.")
+    print("✅ Person C's algorithms loaded successfully!")
+except ImportError as e:
+    print(f"⚠️  Warning: algorithm_person_c.py not found. Using fallback recommendations.")
+    print(f"    Error: {e}")
+    print(f"    Current directory: {os.getcwd()}")
+    print(f"    Backend directory: {backend_dir}")
     ALGORITHMS_AVAILABLE = False
 
 app = FastAPI()
@@ -33,6 +44,7 @@ trips: Dict[str, dict] = {}
 # Initialize PlaceFetcher (Person C's algorithm)
 if ALGORITHMS_AVAILABLE:
     place_fetcher = PlaceFetcher()
+    print("✅ PlaceFetcher initialized!")
 
 # --- Models ---
 class TripCreate(BaseModel):
@@ -156,11 +168,14 @@ def recommendations(trip_id: str, avoid_crowds: bool = False):
     # Use Person C's algorithm if available
     if ALGORITHMS_AVAILABLE:
         try:
+            print(f"🔍 Fetching recommendations for {winning_dest} (avoid_crowds={avoid_crowds})")
+            
             # Step 1: Geocode the destination
             coords = place_fetcher.geocode_destination(winning_dest)
             
             if not coords:
                 # Fallback if geocoding fails
+                print(f"⚠️  Geocoding failed for {winning_dest}")
                 return {
                     "suggestions": [{
                         "destination": winning_dest,
@@ -169,6 +184,7 @@ def recommendations(trip_id: str, avoid_crowds: bool = False):
                 }
             
             lat, lon = coords
+            print(f"✅ Geocoded to: {lat}, {lon}")
             
             # Step 2: Fetch nearby places
             places = place_fetcher.fetch_nearby_places(
@@ -176,6 +192,8 @@ def recommendations(trip_id: str, avoid_crowds: bool = False):
                 radius_km=3.0,
                 categories=['cafe', 'restaurant', 'museum', 'park', 'attraction']
             )
+            
+            print(f"✅ Found {len(places)} places")
             
             if not places:
                 # No places found
@@ -213,10 +231,13 @@ def recommendations(trip_id: str, avoid_crowds: bool = False):
                     "reason": reason
                 })
             
+            print(f"✅ Returning {len(suggestions)} suggestions")
             return {"suggestions": suggestions}
             
         except Exception as e:
             print(f"⚠️  Error in recommendations: {e}")
+            import traceback
+            traceback.print_exc()
             # Fallback on error
             return {
                 "suggestions": [{
@@ -226,6 +247,7 @@ def recommendations(trip_id: str, avoid_crowds: bool = False):
             }
     else:
         # Fallback when algorithm not available
+        print("⚠️  Using fallback recommendations (algorithms not loaded)")
         all_dest = t["options"]["destination"]
         picks = [all_dest[1], all_dest[3], all_dest[0]] if len(all_dest) >= 4 else all_dest
         suggestions = [{"destination": d, "reason": "Good weekend value + easy transit"} for d in picks if d]
@@ -381,6 +403,8 @@ def settle_expenses(trip_id: str):
     # Use Person C's SettlementCalculator if available
     if ALGORITHMS_AVAILABLE:
         try:
+            print(f"💰 Calculating settlement for {len(expenses)} expenses")
+            
             # Calculate settlements using Person C's algorithm
             transfers = SettlementCalculator.calculate_settlements(expenses)
             
@@ -397,6 +421,8 @@ def settle_expenses(trip_id: str):
             total = sum(exp["amount"] for exp in expenses)
             summary = SettlementCalculator.format_settlement_summary(transfers)
             
+            print(f"✅ Settlement complete: {len(transfer_dicts)} transfers")
+            
             return {
                 "trip_id": trip_id,
                 "transfers": transfer_dicts,
@@ -406,6 +432,8 @@ def settle_expenses(trip_id: str):
         
         except Exception as e:
             print(f"⚠️  Error calculating settlement: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "trip_id": trip_id,
                 "transfers": [],
@@ -414,6 +442,7 @@ def settle_expenses(trip_id: str):
             }
     else:
         # Fallback: simple balance calculation without optimization
+        print("⚠️  Using fallback settlement (algorithms not loaded)")
         balances = defaultdict(float)
         
         for expense in expenses:
