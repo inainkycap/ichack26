@@ -74,11 +74,43 @@ export async function renderTripHeader(tripId) {
   if (brandEl) brandEl.textContent = `${BRAND.name} — ${BRAND.tagline}`;
 
   if (titleEl) {
+    // Show loading state first
+    titleEl.textContent = "Loading...";
+    
     try {
       const t = await getTrip(tripId);
-      titleEl.textContent = t.title || "Trip";
-    } catch {
-      titleEl.textContent = "Trip";
+      const actualTitle = (t.title || "").trim();
+      
+      // Use actual title if it exists and isn't the default
+      if (actualTitle && actualTitle !== "Weekend Trip") {
+        titleEl.textContent = actualTitle;
+      } else {
+        // Check localStorage as fallback
+        const localTitle = localStorage.getItem(`trip_title_${tripId}`);
+        if (localTitle) {
+          try {
+            titleEl.textContent = JSON.parse(localTitle);
+          } catch {
+            titleEl.textContent = localTitle;
+          }
+        } else {
+          titleEl.textContent = actualTitle || "Trip";
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch trip title:", error);
+      
+      // Fallback to localStorage
+      try {
+        const localTitle = localStorage.getItem(`trip_title_${tripId}`);
+        if (localTitle) {
+          titleEl.textContent = JSON.parse(localTitle);
+        } else {
+          titleEl.textContent = "Trip";
+        }
+      } catch {
+        titleEl.textContent = "Trip";
+      }
     }
   }
 }
