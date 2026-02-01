@@ -1,11 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, Literal, List
-from collections import defaultdict
 
-# Import Person C algorithms (optional)
+# Import Person C algorithms
 try:
     from algorithm_person_c import SettlementCalculator, PlaceFetcher, CrowdAvoidanceScorer
     ALGORITHMS_AVAILABLE = True
@@ -14,27 +12,25 @@ except Exception:
 
 app = FastAPI(title="Collie API")
 
-# IMPORTANT:
-# - allow_credentials must be False if allow_origins=["*"] (we don't use cookies)
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Fix: handle browser preflight OPTIONS for any route
+# Extra safety: respond to any preflight OPTIONS
 @app.options("/{path:path}")
-def preflight(path: str):
-    return Response(status_code=200)
+def preflight_handler(path: str):
+    return {}
 
 # In-memory store
 trips: Dict[str, dict] = {}
 
-# Init place fetcher if available
-place_fetcher = PlaceFetcher() if ALGORITHMS_AVAILABLE else None
-
+if ALGORITHMS_AVAILABLE:
+    place_fetcher = PlaceFetcher()
 
 # -------------------------
 # Models
@@ -59,6 +55,9 @@ class ExpenseCreate(BaseModel):
     split_between: List[str]
     description: Optional[str] = None
 
+class OptionCreate(BaseModel):
+    type: Literal["destination", "dates"]
+    label: str
 
 # -------------------------
 # Helpers
@@ -70,10 +69,10 @@ def ensure_trip(trip_id: str) -> dict:
             "members": {},  # member_id -> name
             "votes": {"destination": {}, "dates": {}},
             "memberVotes": {},  # member_id -> {destination: "...", dates: "..."}
-            "expenses": [],  # list of expense dicts
+            "expenses": [],
             "options": {
                 "destination": ["Lisbon", "Porto", "Barcelona", "Valencia", "Amsterdam"],
-                "dates": ["Feb 7 – Feb 9", "Feb 14 – Feb 16", "Mar 1 – Mar 3", "Mar 8 – Mar 10"],
+                "dates": ["Feb 7 - Feb 9", "Feb 14 - Feb 16", "Mar 1 - Mar 3", "Mar 8 - Mar 10"],
             },
         }
     return trips[trip_id]
@@ -92,6 +91,19 @@ def tally(trip: dict) -> dict:
 def total_spent(trip: dict) -> float:
     return round(sum(e["amount"] for e in trip["expenses"]), 2)
 
+def _dedupe_keep_order(items: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for x in items:
+        k = x.strip()
+        if not k:
+            continue
+        low = k.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append(k)
+    return out
 
 # -------------------------
 # Core trip endpoints
@@ -134,15 +146,39 @@ def get_members(trip_id: str):
 @app.get("/trip/{trip_id}/options")
 def get_options(trip_id: str):
     t = ensure_trip(trip_id)
+    # Keep options clean (dedupe) in case of repeated adds
+    t["options"]["destination"] = _dedupe_keep_order(t["options"].get("destination", []))
+    t["options"]["dates"] = _dedupe_keep_order(t["options"].get("dates", []))
     return {"title": t["title"], "options": t["options"]}
+
+@app.post("/trip/{trip_id}/options")
+def add_option(trip_id: str, option: OptionCreate):
+    """
+    Add a new option to destination/dates list (used by frontend Add buttons).
+    """
+    t = ensure_trip(trip_id)
+    label = (option.label or "").strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="label cannot be empty")
+
+    t["options"].setdefault(option.type, [])
+    current = t["options"][option.type]
+
+    # Case-insensitive uniqueness
+    existing = {x.lower() for x in current}
+    if label.lower() not in existing:
+        current.insert(0, label)
+
+    # Return updated options
+    t["options"][option.type] = _dedupe_keep_order(current)
+    return {"ok": True, "options": t["options"]}
 
 @app.post("/trip/{trip_id}/join")
 def join_trip(trip_id: str, join: JoinTrip):
     t = ensure_trip(trip_id)
     import random, string
     member_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    name = (join.name or "Anonymous").strip() or "Anonymous"
-    t["members"][member_id] = name
+    t["members"][member_id] = (join.name or "Anonymous").strip() or "Anonymous"
     return {"member_id": member_id}
 
 @app.post("/trip/{trip_id}/vote")
@@ -151,10 +187,6 @@ def vote(trip_id: str, vote: Vote):
     member_id = vote.member_id
     type_ = vote.type
     option = vote.option
-
-    # Optional: enforce member exists
-    if member_id not in t["members"]:
-        raise HTTPException(status_code=400, detail="Member not found. Join first.")
 
     t["memberVotes"].setdefault(member_id, {})
     prev = t["memberVotes"][member_id].get(type_)
@@ -166,7 +198,6 @@ def vote(trip_id: str, vote: Vote):
 
     t["memberVotes"][member_id][type_] = option
     t["votes"][type_][option] = t["votes"][type_].get(option, 0) + 1
-
     return {"ok": True}
 
 @app.get("/trip/{trip_id}/results")
@@ -174,60 +205,60 @@ def results(trip_id: str):
     t = ensure_trip(trip_id)
     return tally(t)
 
-
 # -------------------------
-# Recommendations / Itinerary (anti-touristy by default)
+# Recommendations / Itinerary (anti-touristy default)
 # -------------------------
 @app.get("/trip/{trip_id}/recommendations")
-def recommendations(trip_id: str, avoid_crowds: bool = True):
+def recommendations(trip_id: str):
     t = ensure_trip(trip_id)
     winning_dest = tally(t)["winner"]["destination"]
 
     if not winning_dest:
-        picks = [d for d in t["options"]["destination"][:3] if d]
-        return {"suggestions": [{"destination": d, "reason": "Vote first to unlock hidden gems"} for d in picks]}
+        all_dest = t["options"]["destination"]
+        picks = [d for d in all_dest[:3] if d]
+        return {"suggestions": [{"destination": d, "reason": "Vote first — here are starter ideas"} for d in picks]}
 
+    # Anti-touristy default: rank less crowded first
     if ALGORITHMS_AVAILABLE:
         try:
             coords = place_fetcher.geocode_destination(winning_dest)
             if not coords:
-                return {"suggestions": [{"destination": winning_dest, "reason": "Winner of group vote"}]}
+                return {"suggestions": [{"destination": winning_dest, "reason": "Winner of vote"}]}
 
             lat, lon = coords
             places = place_fetcher.fetch_nearby_places(
-                lat, lon, radius_km=3.0,
-                categories=["cafe", "restaurant", "museum", "park", "attraction"]
+                lat, lon, radius_km=3.0, categories=["cafe", "restaurant", "museum", "park", "attraction"]
             )
             if not places:
-                return {"suggestions": [{"destination": winning_dest, "reason": "Winner of group vote"}]}
+                return {"suggestions": [{"destination": winning_dest, "reason": "Winner of vote"}]}
 
-            ranked = CrowdAvoidanceScorer.rank_places(places, avoid_crowds=avoid_crowds)
+            ranked = CrowdAvoidanceScorer.rank_places(places, avoid_crowds=True)  # always true for Collie
             out = []
             for p in ranked[:6]:
                 if p.crowd_score < 0.3:
-                    reason = f"✨ Hidden gem — {p.category}"
+                    reason = f"✨ Hidden gem • {p.category}"
                 elif p.crowd_score < 0.6:
-                    reason = f"📍 Local favorite — {p.category}"
+                    reason = f"📍 Local vibe • {p.category}"
                 else:
-                    reason = f"🔥 Popular-ish — {p.category}"
+                    reason = f"🔥 Busier • {p.category}"
                 out.append({"destination": p.name, "reason": reason})
             return {"suggestions": out}
         except Exception:
-            return {"suggestions": [{"destination": winning_dest, "reason": "Winner of group vote"}]}
+            return {"suggestions": [{"destination": winning_dest, "reason": "Winner of vote"}]}
 
-    return {"suggestions": [{"destination": winning_dest, "reason": "Winner of group vote"}]}
+    return {"suggestions": [{"destination": winning_dest, "reason": "Winner of vote"}]}
 
 @app.get("/trip/{trip_id}/itinerary")
-def itinerary(trip_id: str, avoid_crowds: bool = True):
+def itinerary(trip_id: str):
     t = ensure_trip(trip_id)
     winning_dest = tally(t)["winner"]["destination"]
     if not winning_dest:
         raise HTTPException(status_code=400, detail="No destination selected yet. Vote first!")
 
     days = {
-        "day_1": {"morning": f"Explore central {winning_dest}", "afternoon": "Lunch + one standout place", "evening": "Dinner + relaxed walk"},
-        "day_2": {"morning": "Museum / landmark (skip the queues if possible)", "afternoon": "Markets / neighborhoods", "evening": "Low-key nightlife"},
-        "day_3": {"morning": "Brunch + coffee", "afternoon": "Last sights + souvenirs", "evening": "Pack + depart"},
+        "day_1": {"morning": f"Explore {winning_dest} (slow start)", "afternoon": "Local lunch + walk", "evening": "Dinner in a neighbourhood"},
+        "day_2": {"morning": "Museum / park", "afternoon": "Markets / bookshops", "evening": "Low-key bars / sunset spot"},
+        "day_3": {"morning": "Brunch", "afternoon": "Last sights", "evening": "Pack + depart"},
     }
 
     recommendations = []
@@ -238,7 +269,7 @@ def itinerary(trip_id: str, avoid_crowds: bool = True):
                 lat, lon = coords
                 places = place_fetcher.fetch_nearby_places(lat, lon, radius_km=3.0)
                 if places:
-                    ranked = CrowdAvoidanceScorer.rank_places(places, avoid_crowds=avoid_crowds)
+                    ranked = CrowdAvoidanceScorer.rank_places(places, avoid_crowds=True)
                     for p in ranked[:10]:
                         recommendations.append({
                             "name": p.name,
@@ -247,25 +278,21 @@ def itinerary(trip_id: str, avoid_crowds: bool = True):
                             "distance_km": round(p.distance_from_center, 2),
                             "is_hidden_gem": p.crowd_score < 0.3
                         })
-
-                    # Put top picks into the skeleton
                     if len(ranked) >= 1:
-                        days["day_1"]["morning"] = f"Visit {ranked[0].name}"
+                        days["day_1"]["morning"] = f"Coffee / start at {ranked[0].name}"
                     if len(ranked) >= 2:
-                        days["day_1"]["afternoon"] = f"Explore {ranked[1].name}"
+                        days["day_1"]["afternoon"] = f"Wander around {ranked[1].name}"
                     if len(ranked) >= 3:
-                        days["day_2"]["morning"] = f"See {ranked[2].name}"
+                        days["day_2"]["morning"] = f"Go to {ranked[2].name}"
         except Exception:
             pass
 
     return {
         "trip_id": trip_id,
         "destination": winning_dest,
-        "avoid_crowds_mode": avoid_crowds,
         "days": days,
         "recommendations": recommendations,
     }
-
 
 # -------------------------
 # Expenses / Settlement
@@ -277,7 +304,7 @@ def add_expense(trip_id: str, expense: ExpenseCreate):
     data = {
         "amount": float(expense.amount),
         "paid_by": (expense.paid_by or "").strip(),
-        "split_between": [s.strip() for s in (expense.split_between or []) if s.strip()],
+        "split_between": [s.strip() for s in expense.split_between if s.strip()],
         "description": (expense.description or "Expense").strip(),
     }
 
@@ -304,19 +331,12 @@ def settle(trip_id: str):
         return {"trip_id": trip_id, "transfers": [], "total_expenses": 0.0, "summary": "No expenses to settle"}
 
     if ALGORITHMS_AVAILABLE:
-        try:
-            transfers = SettlementCalculator.calculate_settlements(expenses)
-            transfer_dicts = [
-                {"from_person": tr.from_person, "to_person": tr.to_person, "amount": round(tr.amount, 2)}
-                for tr in transfers
-            ]
-            summary = SettlementCalculator.format_settlement_summary(transfers)
-            total = sum(e["amount"] for e in expenses)
-            return {"trip_id": trip_id, "transfers": transfer_dicts, "total_expenses": round(total, 2), "summary": summary}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Settlement failed: {e}")
+        transfers = SettlementCalculator.calculate_settlements(expenses)
+        transfer_dicts = [{"from_person": tr.from_person, "to_person": tr.to_person, "amount": round(tr.amount, 2)} for tr in transfers]
+        summary = SettlementCalculator.format_settlement_summary(transfers)
+        total = sum(e["amount"] for e in expenses)
+        return {"trip_id": trip_id, "transfers": transfer_dicts, "total_expenses": round(total, 2), "summary": summary}
 
-    # Fallback minimal
     return {"trip_id": trip_id, "transfers": [], "total_expenses": sum(e["amount"] for e in expenses), "summary": "Settlement algorithm unavailable"}
 
 @app.get("/")
