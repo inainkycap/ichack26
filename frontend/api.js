@@ -5,24 +5,46 @@ async function readError(res) {
   return txt || `${res.status} ${res.statusText}`;
 }
 
+
 export async function apiFetch(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
 
-  // POST/PUT with JSON triggers preflight; backend supports OPTIONS now.
   const headers = {
     ...(options.headers || {}),
     ...(method !== "GET" && method !== "HEAD" ? { "Content-Type": "application/json" } : {}),
   };
 
-  let res;
-  try {
-    res = await fetch(`${window.API_BASE}${path}`, { ...options, method, headers });
-  } catch {
-    throw new Error(`Network error: cannot reach ${window.API_BASE}. Is backend running?`);
+  let lastError;
+  const maxRetries = 2;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${window.API_BASE}${path}`, { 
+        ...options, 
+        method, 
+        headers,
+        // Increase timeout for cold starts
+        signal: AbortSignal.timeout(attempt === 0 ? 10000 : 30000)
+      });
+      
+      if (!res.ok) throw new Error(await readError(res));
+      return await res.json();
+      
+    } catch (error) {
+      lastError = error;
+      
+      // Only retry on network errors, not 4xx/5xx
+      if (attempt < maxRetries && error.message.includes("Network error")) {
+        console.log(`Retry ${attempt + 1}/${maxRetries} after network error...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        continue;
+      }
+      
+      break;
+    }
   }
-
-  if (!res.ok) throw new Error(await readError(res));
-  return await res.json();
+  
+  throw lastError;
 }
 
 // Trip
