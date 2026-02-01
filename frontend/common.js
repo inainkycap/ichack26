@@ -70,46 +70,85 @@ export async function renderTripHeader(tripId) {
   const titleEl = $("#tripTitle");
   const brandEl = $("#brandLine");
 
+  // Update chip and brand line immediately
   if (chip) chip.textContent = `${BRAND.name} • Trip ${tripId}`;
   if (brandEl) brandEl.textContent = `${BRAND.name} — ${BRAND.tagline}`;
 
+  // Handle title with loading state and robust fallbacks
   if (titleEl) {
-    // Show loading state first
+    // Show loading state
+    const originalContent = titleEl.textContent;
     titleEl.textContent = "Loading...";
+    titleEl.classList.add("animate-pulse", "text-slate-400");
     
     try {
-      const t = await getTrip(tripId);
-      const actualTitle = (t.title || "").trim();
+      // Try to fetch from backend with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
       
-      // Use actual title if it exists and isn't the default
-      if (actualTitle && actualTitle !== "Weekend Trip") {
-        titleEl.textContent = actualTitle;
-      } else {
-        // Check localStorage as fallback
-        const localTitle = localStorage.getItem(`trip_title_${tripId}`);
-        if (localTitle) {
-          try {
-            titleEl.textContent = JSON.parse(localTitle);
-          } catch {
-            titleEl.textContent = localTitle;
+      const t = await getTrip(tripId);
+      clearTimeout(timeoutId);
+      
+      const apiTitle = (t.title || "").trim();
+      
+      // Remove loading state
+      titleEl.classList.remove("animate-pulse", "text-slate-400");
+      
+      // Priority 1: Use API title if it's not the default
+      if (apiTitle && apiTitle !== "Weekend Trip") {
+        titleEl.textContent = apiTitle;
+        // Save to localStorage for future fallback
+        localStorage.setItem(`trip_title_${tripId}`, JSON.stringify(apiTitle));
+        return;
+      }
+      
+      // Priority 2: Check localStorage
+      const localTitle = localStorage.getItem(`trip_title_${tripId}`);
+      if (localTitle) {
+        try {
+          const parsed = JSON.parse(localTitle);
+          if (parsed && parsed !== "Weekend Trip") {
+            titleEl.textContent = parsed;
+            return;
           }
-        } else {
-          titleEl.textContent = actualTitle || "Trip";
+        } catch {
+          // If JSON parse fails, use it as-is
+          if (localTitle !== "Weekend Trip") {
+            titleEl.textContent = localTitle;
+            return;
+          }
         }
       }
+      
+      // Priority 3: Use API title even if it's default
+      if (apiTitle) {
+        titleEl.textContent = apiTitle;
+      } else {
+        titleEl.textContent = "Trip";
+      }
+      
     } catch (error) {
       console.error("Failed to fetch trip title:", error);
+      
+      // Remove loading state
+      titleEl.classList.remove("animate-pulse", "text-slate-400");
       
       // Fallback to localStorage
       try {
         const localTitle = localStorage.getItem(`trip_title_${tripId}`);
         if (localTitle) {
-          titleEl.textContent = JSON.parse(localTitle);
+          const parsed = JSON.parse(localTitle);
+          titleEl.textContent = parsed || "Trip";
         } else {
           titleEl.textContent = "Trip";
         }
       } catch {
         titleEl.textContent = "Trip";
+      }
+      
+      // Show user-friendly error if backend is unreachable
+      if (error.message && error.message.includes("Network error")) {
+        toast("Backend is starting up (this may take 30-60s on first load)...");
       }
     }
   }
@@ -119,13 +158,17 @@ export async function renderMemberList(tripId, elId) {
   const el = document.getElementById(elId);
   if (!el) return;
 
+  el.innerHTML = '<div class="text-center text-slate-500 animate-pulse">Loading members...</div>';
+
   try {
     const data = await getMembers(tripId);
     const members = data.members || [];
+    
     if (!members.length) {
       el.innerHTML = `<div class="text-base text-slate-500">No one joined yet</div>`;
       return;
     }
+    
     el.innerHTML = "";
     members.forEach((m) => {
       const row = document.createElement("div");
@@ -136,8 +179,9 @@ export async function renderMemberList(tripId, elId) {
       `;
       el.appendChild(row);
     });
-  } catch {
-    el.innerHTML = `<div class="text-base text-red-600">Failed to load members</div>`;
+  } catch (error) {
+    console.error("Failed to load members:", error);
+    el.innerHTML = `<div class="text-base text-red-600">Failed to load members. <button onclick="location.reload()" class="underline">Retry?</button></div>`;
   }
 }
 
@@ -147,6 +191,6 @@ export function prettyRange(startISO, endISO) {
   const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   const fmtY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-  if (a.getFullYear() === b.getFullYear()) return `${fmt.format(a)} – ${fmt.format(b)}`;
-  return `${fmtY.format(a)} – ${fmtY.format(b)}`;
+  if (a.getFullYear() === b.getFullYear()) return `${fmt.format(a)} — ${fmt.format(b)}`;
+  return `${fmtY.format(a)} — ${fmtY.format(b)}`;
 }
