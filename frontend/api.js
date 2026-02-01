@@ -1,4 +1,4 @@
-const API_BASE = localStorage.getItem("api_base") || "http://127.0.0.1:8000";
+const API_BASE = localStorage.getItem("api_base") || "https://ichack26-backend.onrender.com";
 
 async function readError(res) {
   const txt = await res.text().catch(() => "");
